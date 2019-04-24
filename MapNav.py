@@ -18,15 +18,17 @@ class MapNav:
         self.incollision = False
         self.score = 0
         self.sim_images = []
-        self.reset()
         self.initialize_config()
+        self.reset()
+
 
     def reset(self):
         self.not_mapped = self.map.get_inprogress()
         self.incollision = False
         self.score = 0
-        self.cur_config = self.init_config
+        self.set_init_config(self.init_config)
         self.sim_images = []
+        self.hide_obstacles()
 
     def start_recording(self):
         self.sim_images = []
@@ -58,8 +60,8 @@ class MapNav:
         return False
 
     def set_init_config(self, config):
-        self.init_config = config
-        self.cur_config = config
+        self.init_config = config.clone()
+        self.cur_config = config.clone()
 
     def inflate(self,element, safe_offset):
         boundary = self.map.get_boundary()
@@ -82,8 +84,10 @@ class MapNav:
             distance = self.get_distance(config, o)
             if distance<=self.sensor_range:
                 o.set_detected(True)
-            else:
-                o.set_detected(False)
+
+    def hide_obstacles(self):
+        for o in self.map.get_obstacles():
+            o.set_detected(False)
 
     def check_collision(self, config):
         boundary = self.map.get_boundary()
@@ -163,18 +167,27 @@ class MapNav:
         y_p = (box['min'][1] + box['max'][1])/2
         heading = math.atan2(x_p-config.x, y_p-config.y)/math.pi*180
         delta = abs(heading-config.theta)
-        return 
+        return delta
 
+    def get_input_size(self):
+        return self.map.get_boundary()
+
+    def get_possible_actions(self):
+        return [1,2,3]
+
+    def step(self, action_idx):
+        action = self.get_possible_actions()[action_idx]
+        reward = self.apply_action(action, False)
+        done = len(self.not_mapped) == 0
+        collision = self.incollision
+        return reward, collision, done
 
     def apply_action(self, action, render=True):
         # actions can be:
-            # 0: do nothing
             # 1: move forward
             # 2: rotate CW by 45 deg
             # 3: rotate CCW by 45 deg
-        if action==0:
-            pass
-        elif action==1:
+        if action==1:
             heading = math.pi*self.cur_config.theta/180
             x_add = int(round(math.sin(heading)))
             y_add = int(round(math.cos(heading)))
@@ -195,59 +208,60 @@ class MapNav:
         observed = self.update_observation(self.cur_config)
         number_mapped = len(observed)
         self.score = self.score + number_mapped
-        if number_mapped>0:
-            print 'Mapped new elemenets', observed
+        # if number_mapped>0:
+        #     print 'Mapped new elemenets', observed
 
         if render:
             self.render()
 
+        return number_mapped
 
-    def render(self):
-        render_scale = 10
-        img = self.map.get_img(render_scale)
-        
+
+    def render(self, render_scale=10, complete=True, store=True):
+        img = self.map.get_img(render_scale=1, complete=False)
+        # Render the agent
         y_bound = self.map.get_boundary()[1]*render_scale
         safe_offset = self.safe_offset*render_scale
         sensor_range = self.sensor_range*render_scale
 
         loc = (self.cur_config.x*render_scale,self.cur_config.y*render_scale)
         center = (loc[0], y_bound-loc[1])
-        cv2.circle(img,center, 10, (0), -1)
-        cv2.circle(img,center, safe_offset, (0), 1)
-        cv2.circle(img,center, sensor_range, (0), 1)
-
+        cv2.circle(img, center, safe_offset, (0.25), -1)
+        if complete:
+            cv2.circle(img,center, safe_offset, (0), 1)
+            cv2.circle(img,center, sensor_range, (0), 1)
 
         head = self.cur_config.theta
         head_pt = self.get_head_pt(loc, head, safe_offset)
         head_pt = (head_pt[0],y_bound-head_pt[1])
         cv2.line(img, center, head_pt, (0), 2)
 
-        st_fov_head = int((head-self.fov/2+360)%360)
-        st_fov_pt = self.get_head_pt(loc, st_fov_head, sensor_range)
-        st_fov_pt = (st_fov_pt[0],y_bound-st_fov_pt[1])
-        cv2.line(img, center, st_fov_pt, (0), 1)
+        if complete:
+            st_fov_head = int((head-self.fov/2+360)%360)
+            st_fov_pt = self.get_head_pt(loc, st_fov_head, sensor_range)
+            st_fov_pt = (st_fov_pt[0],y_bound-st_fov_pt[1])
+            cv2.line(img, center, st_fov_pt, (0), 1)
 
-        end_fov_head = int((head+self.fov/2)%360)
-        end_fov_pt = self.get_head_pt(loc, end_fov_head, sensor_range)
-        end_fov_pt = (end_fov_pt[0],y_bound-end_fov_pt[1])
-        cv2.line(img, center, end_fov_pt, (0), 1)
+            end_fov_head = int((head+self.fov/2)%360)
+            end_fov_pt = self.get_head_pt(loc, end_fov_head, sensor_range)
+            end_fov_pt = (end_fov_pt[0],y_bound-end_fov_pt[1])
+            cv2.line(img, center, end_fov_pt, (0), 1)
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        text = 'Score: ' + str(self.score)
-        cv2.putText(img,text ,(50,50), font, 0.7, (0), 2)
+        if complete:
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            text = 'Score: ' + str(self.score)
+            cv2.putText(img,text ,(50,50), font, 0.7, (0), 2)
 
-        text = 'Elements to map: ' + str(len(self.not_mapped))
-        cv2.putText(img,text ,(50,80), font, 0.7, (0), 2)
+            text = 'Elements to map: ' + str(len(self.not_mapped))
+            cv2.putText(img,text ,(50,80), font, 0.7, (0), 2)
 
-        text = 'Collsion: ' + str(self.incollision)
-        cv2.putText(img,text ,(50,110), font, 0.8, (0), 2)
+            text = 'Collsion: ' + str(self.incollision)
+            cv2.putText(img,text ,(50,110), font, 0.8, (0), 2)
 
-        self.sim_images.append(img)
-
-
-        cv2.imshow('map',img)
-        cv2.waitKey(200)
+        if store:
+            self.sim_images.append(img)
         # cv2.destroyAllWindows()
+        return img
 
     def get_head_pt(self, start, head, distance):
         angle = float(head)/180.0*math.pi
@@ -262,7 +276,10 @@ class Config:
         self.x = x
         self.y = y
         self.theta = theta
-        
+
+    def clone(self):
+        config = Config(self.x, self.y, self.theta)
+        return config
 
 if __name__ == "__main__":
 

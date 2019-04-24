@@ -35,7 +35,7 @@ class MapFactory:
         map.add_element(Element('wall12', [(0,44),(24,44),(24,46),(0,46)],False))
         map.add_element(Element('wall13', [(40,44),(49,44),(49,46),(40,46)],False))
         map.add_element(Element('wall14', [(51,44),(69,44),(69,46),(51,46)],True))
-        map.add_element(Element('wall15', [(76,44),(99,44),(99,46),(76,46)],True))
+        map.add_element(Element('wall15', [(86,44),(99,44),(99,46),(86,46)],True))
         map.add_element(Element('wall16', [(49,44),(51,44),(51,69),(49,69)],False))
         map.add_element(Element('column17', [(28,60),(32,60),(32,64),(28,64)],False))
         map.add_element(Element('column18', [(68,60),(72,60),(72,64),(68,64)],True))
@@ -111,14 +111,14 @@ class Map:
                 return idx
         return None
 
-    def get_img(self, scale=10):
-        boundary = self.get_boundary()*scale-scale
+    def get_img(self, render_scale=10, complete=True):
+        boundary = self.get_boundary()*render_scale-render_scale
         img = np.ones(np.flip(boundary))
         for el in self.elements:
             geom = el.get_geometry()
             shape = np.zeros(geom.shape,dtype=int)
-            shape[:,0] = geom[:,0]*scale
-            shape[:,1] = boundary[1]-geom[:,1]*scale
+            shape[:,0] = geom[:,0]*render_scale
+            shape[:,1] = boundary[1]-geom[:,1]*render_scale
             progress = el.is_inprogress()
             if progress:
                 cv2.fillPoly(img,pts=[shape],color=0.5)
@@ -129,22 +129,22 @@ class Map:
             if ob.is_detected():
                 geom = ob.get_geometry()
                 shape = np.zeros(geom.shape,dtype=int)
-                shape[:,0] = geom[:,0]*scale
-                shape[:,1] = boundary[1]-geom[:,1]*scale
+                shape[:,0] = geom[:,0]*render_scale
+                shape[:,1] = boundary[1]-geom[:,1]*render_scale
                 cv2.fillPoly(img,pts=[shape],color=0)
                 # cv2.polylines(img,pts=[shape],isClosed=True,color=0,thickness=3)
-
-        for el in self.elements:
-            elid = str(el.get_id())
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            loc_max = (el.get_bbox()['max']*scale)
-            loc_min = (el.get_bbox()['min']*scale)
-            loc = [loc_max[0]+scale, boundary[1]-loc_max[1]-scale]
-            if loc_max[0]>=boundary[0]-scale:
-                loc[0] = loc_min[0]-scale
-            if loc_max[1]>=boundary[1]-scale:
-                loc[1] = boundary[1]-loc_min[1]-scale
-            cv2.putText(img,elid,tuple(loc), font, 0.5,(0),1)
+        if complete:
+            for el in self.elements:
+                elid = str(el.get_id())
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                loc_max = (el.get_bbox()['max']*render_scale)
+                loc_min = (el.get_bbox()['min']*render_scale)
+                loc = [loc_max[0]+render_scale, boundary[1]-loc_max[1]-render_scale]
+                if loc_max[0]>=boundary[0]-render_scale:
+                    loc[0] = loc_min[0]-render_scale
+                if loc_max[1]>=boundary[1]-render_scale:
+                    loc[1] = boundary[1]-loc_min[1]-render_scale
+                cv2.putText(img,elid,tuple(loc), font, 0.5,(0),1)
         return img
 
     def show_img(self):
