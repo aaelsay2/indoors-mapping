@@ -15,8 +15,17 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
+from tensorboardX import SummaryWriter
+
+import logging
+
+logging.basicConfig(level='INFO',
+                    format='%(asctime)s %(message)s',
+                    datefmt='%m/%d/%Y %I:%M:%S %p')
 
 env = MapNav(map_id=1, safe_offset=3, sensor_range=20, fov=60, resolution=50)
+
+writer = SummaryWriter()
 
 plt.ion()
 
@@ -25,6 +34,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
+MODEL_PATH = './dqn-indoor_map.model'
 
 class ReplayMemory(object):
 
@@ -69,13 +79,14 @@ class DQN(nn.Module):
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
-        x = F.relu(self.bn3(self.conv3(x)))
-        # print(x.size())
-        return self.head(x.view(x.size(0), -1))
+      x = F.relu(self.bn1(self.conv1(x)))
+      x = F.relu(self.bn2(self.conv2(x)))
+      x = F.relu(self.bn3(self.conv3(x)))
+      # print(x.size())
+      return self.head(x.view(x.size(0), -1))
 
 resize = T.Compose([T.ToPILImage(),
+                    T.Grayscale(),
                     T.ToTensor()])
 
 def get_screen():
@@ -85,14 +96,24 @@ def get_screen():
   # print(screen.shape)
   screen = np.ascontiguousarray(screen, dtype=np.float32)
   screen = torch.from_numpy(screen)
-  screen = resize(screen)
-  return screen.unsqueeze(0).to(device)
+  screen = resize(screen.unsqueeze(0))
+  # pdb.set_trace()
+  return screen.to(device)
   
+
+def preprocess_frame(frame):
+    # frame = torch.from_numpy(frame)
+    # frame = frame.to(device, dtype=torch.float32)
+    frame = frame.unsqueeze(0)
+
+    return frame
+
 
 def plot_game():
   plt.figure(1)
   plt.clf()
-  img = get_screen().cpu().squeeze(0).squeeze(0).numpy()
+  img = get_screen().squeeze(0).cpu().numpy()
+  # pdb.set_trace()
 
   plt.imshow(img, interpolation='none',cmap='gray')
   plt.show()
@@ -104,7 +125,9 @@ GAMMA = 0.999
 EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 500
-TARGET_UPDATE = 10
+EPS_STEP_END = 1000000
+TARGET_UPDATE = 100
+NUM_FRAMES = 500000
 
 # Get screen size so that we can initialize layers correctly based on shape
 # returned from AI gym. Typical dimensions at this point are close to 3x40x90
@@ -121,25 +144,33 @@ target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 
 optimizer = optim.RMSprop(policy_net.parameters())
-memory = ReplayMemory(10000)
+MEMORY_CAPACITY = 10000
+memory = ReplayMemory(MEMORY_CAPACITY)
 
 steps_done = 0
 
-def select_action(state):
+def _get_eps():
+    if(steps_done > EPS_STEP_END):
+        return 0
+    decay_factor = math.exp(-1. * steps_done / EPS_DECAY)
+    return EPS_END + (EPS_START - EPS_END) * decay_factor
+
+def select_action(state, update_step=True):
     global steps_done
     sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * steps_done / EPS_DECAY)
-    steps_done += 1
+    eps_threshold = _get_eps()
+    if update_step:
+      steps_done += 1
+
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
+            state = preprocess_frame(state)
             return policy_net(state).max(1)[1].view(1, 1)
     else:
-        return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
-
+        return torch.LongTensor(1).random_(n_actions).to(device).view(1, 1) #torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
 
 episode_durations = []
 
@@ -172,11 +203,12 @@ def optimize_model():
     # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                           batch.next_state)), device=device, dtype=torch.uint8)
-    non_final_next_states = torch.cat([s for s in batch.next_state
+    non_final_next_states = torch.stack([s for s in batch.next_state
                                                 if s is not None])
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
+
+    state_batch = torch.stack(batch.state).to(device)
+    action_batch = torch.cat(batch.action).to(device)
+    reward_batch = torch.tensor(batch.reward).to(device)
 
     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
     # columns of actions taken. These are the actions which would've been taken
@@ -204,6 +236,8 @@ def optimize_model():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
+    return loss
+
 
 if __name__=='__main__':
   num_episodes = 1000
@@ -211,18 +245,45 @@ if __name__=='__main__':
   recording_count = 0
   env.start_recording()
 
+  state = get_screen()
+
+  logging.info('Filling up memory')
+  for t in range(MEMORY_CAPACITY):
+    # sample action from observed state
+    action = torch.LongTensor(1).random_(n_actions).to(device).view(1, 1) #torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
+    reward, collision, done = env.step(action.item()) #item()
+
+    next_state = get_screen()
+    memory.push(state, action, next_state, reward)
+    state = next_state
+
+    if(done):
+        env.reset()
+        state = get_screen()
+
+    if((t % MEMORY_CAPACITY / 2) == 0):
+        logging.info('finished {:.02f} %'.format(t / MEMORY_CAPACITY * 100))
+
+  logging.info('Training Start')
+
+  total_frame_count = 0
+
   for i_episode in range(num_episodes):
   # Initialize the environment and state
     env.reset()
     current_screen = get_screen()
     state = current_screen
+    policy_net.train()
+
     total_reward = 0
+    episode_update_reward = 0
+    episode_update = 0    
 
     for t in count():
     # Select and perform an action
       action = select_action(state)
-      reward, collision, done = env.step(action.item())
-      total_reward= total_reward + reward
+      reward, collision, done = env.step(action.item()) #
+      total_reward += reward
 
       reward = torch.tensor([reward], device=device)
 
@@ -243,7 +304,7 @@ if __name__=='__main__':
       state = next_state
 
       # Perform one step of the optimization (on the target network)
-      optimize_model()
+      loss = optimize_model()
 
       plot_game()
       # if recording_count<=recording_limit:
@@ -253,15 +314,55 @@ if __name__=='__main__':
       #     print('sample video recorded')
       #     env.end_recording()
 
+      # update episode graph variables
+      episode_update_reward += reward.item()
+      episode_update += 1
+      total_frame_count += 1
+      writer.add_scalar('data/loss', loss.item(), total_frame_count)
+      writer.add_scalar('data/eps', _get_eps(), total_frame_count)
 
       if done or collision:
         episode_durations.append(t + 1)
         plot_durations()
         break
 
+      # Update the target network, copying all weights and biases in DQN
+      if i_episode % TARGET_UPDATE == 0:
+        target_net.load_state_dict(policy_net.state_dict())
+        torch.save(policy_net, MODEL_PATH)
+
+    episode_update_reward /= episode_update
+    writer.add_scalar('data/episode_update_reward', episode_update_reward, i_episode)
+    writer.add_scalar('data/episode_reward', total_reward, i_episode)
+    writer.add_scalar('data/episode_length', episode_update, i_episode)
+
+    # create video every 100 episodes
+    if((i_episode % 100) == 0):
+        policy_net.eval()
+        env.reset()
+        current_screen = get_screen()
+        state = current_screen
+
+        episode_video_frames = []
+        for t in count():
+            action = select_action(state, update_step=False)
+            _, _, done = env.step(action.item())
+            obs = get_screen()
+            episode_video_frames.append(obs.cpu().numpy())
+            if(done or t > 3000):
+                break
+        # stacked with T, C, H, W     #T, H, W, C
+        # pdb.set_trace()
+        stacked_frames = np.stack(episode_video_frames).transpose(1, 0, 2, 3)
+        stacked_frames = np.expand_dims(stacked_frames, 0)
+        # video takes B, C, T, H, W
+        writer.add_video('video/episode', stacked_frames, i_episode)
+
+    if(total_frame_count > NUM_FRAMES):
+        torch.save(policy_net, MODEL_PATH)
+        break      
+
     print('Reward this episode:',total_reward)
-    # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0:
-      target_net.load_state_dict(policy_net.state_dict())
+
 
   print('Complete')
