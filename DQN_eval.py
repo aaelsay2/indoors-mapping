@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 
 import logging
 
@@ -25,7 +25,7 @@ logging.basicConfig(level='INFO',
 
 env = MapNav(map_id=1, safe_offset=3, sensor_range=20, fov=60, resolution=50)
 
-writer = SummaryWriter()
+# writer = SummaryWriter()
 
 plt.ion()
 
@@ -240,48 +240,52 @@ def optimize_model():
 
 
 if __name__=='__main__':
-  num_episodes = 10000000
+  num_episodes = 30
   recording_limit = 2000
   recording_count = 0
   env.start_recording()
 
   state = get_screen()
 
-  logging.info('Filling up memory')
-  for t in range(MEMORY_CAPACITY):
-    # sample action from observed state
-    action = torch.LongTensor(1).random_(n_actions).to(device).view(1, 1) #torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
-    reward, collision, done = env.step(action.item()) #item()
+  # logging.info('Filling up memory')
+  # for t in range(MEMORY_CAPACITY):
+  #   # sample action from observed state
+  #   action = torch.LongTensor(1).random_(n_actions).to(device).view(1, 1) #torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
+  #   reward, collision, done = env.step(action.item()) #item()
 
-    next_state = get_screen()
-    memory.push(state, action, next_state, reward)
-    state = next_state
+  #   next_state = get_screen()
+  #   memory.push(state, action, next_state, reward)
+  #   state = next_state
 
-    if(done):
-        env.reset()
-        state = get_screen()
+  #   if(done):
+  #       env.reset()
+  #       state = get_screen()
 
-    if((t % MEMORY_CAPACITY / 2) == 0):
-        logging.info('finished {:.02f} %'.format(t / MEMORY_CAPACITY * 100))
+  #   if((t % MEMORY_CAPACITY / 2) == 0):
+  #       logging.info('finished {:.02f} %'.format(t / MEMORY_CAPACITY * 100))
 
-  logging.info('Training Start')
+  logging.info('Evaluation Start')
 
   total_frame_count = 0
+
+  # policy_net.load_state_dict(policy_net.state_dict())
+  policy_net = torch.load(MODEL_PATH)
+  policy_net.eval()
+  print(policy_net)
 
   for i_episode in range(num_episodes):
   # Initialize the environment and state
     env.reset()
     current_screen = get_screen()
     state = current_screen
-    policy_net.train()
 
     total_reward = 0
     episode_update_reward = 0
-    episode_update = 0    
+    episode_update = 0
 
     for t in count():
     # Select and perform an action
-      action = select_action(state)
+      action = select_action(state, update_step=False)
       reward, collision, done = env.step(action.item()) #
       total_reward += reward
 
@@ -295,16 +299,16 @@ if __name__=='__main__':
 
       # plt.figure(1)
       # plt.imshow(current_screen.cpu().squeeze(0).squeeze(0).numpy(),
-          #  interpolation='none')
+      #      interpolation='none')
 
       # Store the transition in memory
-      memory.push(state, action, next_state, reward)
+      # memory.push(state, action, next_state, reward)
 
       # Move to the next state
       state = next_state
 
       # Perform one step of the optimization (on the target network)
-      loss = optimize_model()
+      # loss = optimize_model()
 
       plot_game()
       # if recording_count<=recording_limit:
@@ -318,8 +322,8 @@ if __name__=='__main__':
       episode_update_reward += reward.item()
       episode_update += 1
       total_frame_count += 1
-      writer.add_scalar('data/loss', loss.item(), total_frame_count)
-      writer.add_scalar('data/eps', _get_eps(), total_frame_count)
+      # writer.add_scalar('data/loss', loss.item(), total_frame_count)
+      # writer.add_scalar('data/eps', _get_eps(), total_frame_count)
 
       if done or collision:
         episode_durations.append(t + 1)
@@ -327,40 +331,37 @@ if __name__=='__main__':
         break
 
       # Update the target network, copying all weights and biases in DQN
-      if i_episode % TARGET_UPDATE == 0:
-        target_net.load_state_dict(policy_net.state_dict())
-        torch.save(policy_net, MODEL_PATH)
+      # if i_episode % TARGET_UPDATE == 0:
+      #   target_net.load_state_dict(policy_net.state_dict())
+      #   torch.save(policy_net, MODEL_PATH)
 
-    episode_update_reward /= episode_update
-    writer.add_scalar('data/episode_update_reward', episode_update_reward, i_episode)
-    writer.add_scalar('data/episode_reward', total_reward, i_episode)
-    writer.add_scalar('data/episode_length', episode_update, i_episode)
+    # episode_update_reward /= episode_update
+    # writer.add_scalar('data/episode_update_reward', episode_update_reward, i_episode)
+    # writer.add_scalar('data/episode_reward', total_reward, i_episode)
+    # writer.add_scalar('data/episode_length', episode_update, i_episode)
 
     # create video every 100 episodes
-    if((i_episode % 100) == 0):
-        policy_net.eval()
-        env.reset()
-        current_screen = get_screen()
-        state = current_screen
+    # if((i_episode % 100) == 0):
+    #     policy_net.eval()
+    #     env.reset()
+    #     current_screen = get_screen()
+    #     state = current_screen
 
-        episode_video_frames = []
-        for t in count():
-            action = select_action(state, update_step=False)
-            _, _, done = env.step(action.item())
-            obs = get_screen()
-            episode_video_frames.append(obs.cpu().numpy())
-            if(done or t > 3000):
-                break
-        # stacked with T, C, H, W     #T, H, W, C
-        # pdb.set_trace()
-        stacked_frames = np.stack(episode_video_frames).transpose(1, 0, 2, 3)
-        stacked_frames = np.expand_dims(stacked_frames, 0)
-        # video takes B, C, T, H, W
-        writer.add_video('video/episode', stacked_frames, i_episode)
-
-    if(total_frame_count > NUM_FRAMES):
-        torch.save(policy_net, MODEL_PATH)
-        break      
+    #     episode_video_frames = []
+    #     for t in count():
+    #         action = select_action(state, update_step=False)
+    #         _, _, done = env.step(action.item())
+    #         obs = get_screen()
+    #         episode_video_frames.append(obs.cpu().numpy())
+    #         if(done or t > 3000):
+    #             break
+    #     # stacked with T, C, H, W     #T, H, W, C
+    #     # pdb.set_trace()
+    #     stacked_frames = np.stack(episode_video_frames).transpose(1, 0, 2, 3)
+    #     stacked_frames = np.expand_dims(stacked_frames, 0)
+    #     # video takes B, C, T, H, W
+    #     writer.add_video('video/episode', stacked_frames, i_episode)
+    
 
     print('Reward this episode:',total_reward)
 
