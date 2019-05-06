@@ -218,7 +218,7 @@ class MapNav:
 
 
     def render(self, render_scale=10, complete=True, store=True):
-        img = self.map.get_img(render_scale=1, complete=False)
+        img = self.map.get_img(render_scale=render_scale, complete=False)
         # Render the agent
         y_bound = self.map.get_boundary()[1]*render_scale
         safe_offset = self.safe_offset*render_scale
