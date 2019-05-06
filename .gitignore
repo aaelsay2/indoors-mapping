@@ -1,6 +1,8 @@
 simulation
+runs
 **/*.png
 **/*.pyc
 **/*.avi
 .vscode
+*.model
 

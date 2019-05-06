@@ -7,45 +7,60 @@ class MapFactory:
         self.map = None
 
     def create_map(self, id):
-        map = None
+        navmap = None
         if id==1:
-            map = self.map1()
+            navmap = self.map1()
         elif id==2:
-            pass
+            navmap = self.map2()
         elif id==3:
             pass
         else:
             pass
-        return map
+        return navmap
 
     def map1(self):
-        map = Map()
-        map.set_boundary([100,70])
-        map.add_element(Element('column1', [(0,0),(2,0),(2,4),(0,4)],False))
-        map.add_element(Element('column2', [(20,0),(24,0),(24,4),(20,4)],False))
-        map.add_element(Element('column3', [(40,0),(44,0),(44,4),(40,4)],False))
-        map.add_element(Element('column4', [(56,0),(60,0),(60,4),(56,4)],False))
-        map.add_element(Element('column5', [(76,0),(80,0),(80,4),(76,4)],False))
-        map.add_element(Element('column6', [(97,0),(99,0),(99,4),(97,4)],False))
-        map.add_element(Element('column7', [(0,20),(2,20),(2,24),(0,24)],False))
-        map.add_element(Element('column8', [(28,20),(32,20),(32,24),(28,24)],False))
-        map.add_element(Element('column9', [(48,20),(52,20),(52,24),(48,24)],False))
-        map.add_element(Element('column10', [(68,20),(72,20),(72,24),(68,24)],True))
-        map.add_element(Element('column11', [(97,20),(99,20),(99,24),(97,24)],True))
-        map.add_element(Element('wall12', [(0,44),(24,44),(24,46),(0,46)],False))
-        map.add_element(Element('wall13', [(40,44),(49,44),(49,46),(40,46)],False))
-        map.add_element(Element('wall14', [(51,44),(69,44),(69,46),(51,46)],True))
-        map.add_element(Element('wall15', [(86,44),(99,44),(99,46),(86,46)],True))
-        map.add_element(Element('wall16', [(49,44),(51,44),(51,69),(49,69)],False))
-        map.add_element(Element('column17', [(28,60),(32,60),(32,64),(28,64)],False))
-        map.add_element(Element('column18', [(68,60),(72,60),(72,64),(68,64)],True))
-        map.add_obstacle(Obstacle([(50,16),(64,16),(64,18),(50,18)]))
-        map.add_obstacle(Obstacle([(30,30),(34,30),(34,34),(30,34)]))
-        map.add_obstacle(Obstacle([(69,24),(74,24),(74,30),(69,30)]))
-        map.add_obstacle(Obstacle([(18,46),(20,46),(20,64),(18,64)]))
-        map.add_obstacle(Obstacle([(58,50),(62,50),(62,64),(58,64)]))
+        navmap = Map()
+        navmap.set_boundary([100,70])
+        navmap.add_element(Element('column7', [(0,20),(5,20),(5,28),(0,28)],True))
+        navmap.add_element(Element('column8', [(28,20),(35,20),(35,27),(28,27)],False))
+        navmap.add_element(Element('column10', [(68,20),(75,20),(75,27),(68,27)],True))
+        navmap.add_element(Element('column11', [(95,20),(99,20),(99,27),(95,27)],False))
+
+        navmap.add_element(Element('column20', [(0,60),(5,60),(5,68),(0,68)],False))
+        navmap.add_element(Element('column17', [(28,60),(35,60),(35,67),(28,67)],True))
+        navmap.add_element(Element('column18', [(68,60),(75,60),(75,67),(68,67)],False))
+        navmap.add_element(Element('column19', [(95,60),(99,60),(99,67),(95,67)],True))
         
-        return map
+        return navmap
+
+    def map2(self):
+        navmap = Map()
+        navmap.set_boundary([100,70])
+        navmap.add_element(Element('column1', [(0,0),(2,0),(2,4),(0,4)],False))
+        navmap.add_element(Element('column2', [(20,0),(24,0),(24,4),(20,4)],False))
+        navmap.add_element(Element('column3', [(40,0),(44,0),(44,4),(40,4)],False))
+        navmap.add_element(Element('column4', [(56,0),(60,0),(60,4),(56,4)],False))
+        navmap.add_element(Element('column5', [(76,0),(80,0),(80,4),(76,4)],False))
+        navmap.add_element(Element('column6', [(97,0),(99,0),(99,4),(97,4)],False))
+        navmap.add_element(Element('column7', [(0,20),(2,20),(2,24),(0,24)],False))
+        navmap.add_element(Element('column8', [(28,20),(32,20),(32,24),(28,24)],False))
+        navmap.add_element(Element('column9', [(48,20),(52,20),(52,24),(48,24)],False))
+        navmap.add_element(Element('column10', [(68,20),(72,20),(72,24),(68,24)],True))
+        navmap.add_element(Element('column11', [(97,20),(99,20),(99,24),(97,24)],True))
+        navmap.add_element(Element('wall12', [(0,44),(24,44),(24,46),(0,46)],False))
+        navmap.add_element(Element('wall13', [(40,44),(49,44),(49,46),(40,46)],False))
+        navmap.add_element(Element('wall14', [(51,44),(69,44),(69,46),(51,46)],True))
+        navmap.add_element(Element('wall15', [(86,44),(99,44),(99,46),(86,46)],True))
+        navmap.add_element(Element('wall16', [(49,44),(51,44),(51,69),(49,69)],False))
+        navmap.add_element(Element('column17', [(28,60),(32,60),(32,64),(28,64)],False))
+        navmap.add_element(Element('column18', [(68,60),(72,60),(72,64),(68,64)],True))
+        navmap.add_obstacle(Obstacle([(50,16),(64,16),(64,18),(50,18)]))
+        navmap.add_obstacle(Obstacle([(30,30),(34,30),(34,34),(30,34)]))
+        navmap.add_obstacle(Obstacle([(69,24),(74,24),(74,30),(69,30)]))
+        navmap.add_obstacle(Obstacle([(18,46),(20,46),(20,64),(18,64)]))
+        navmap.add_obstacle(Obstacle([(58,50),(62,50),(62,64),(58,64)]))
+        
+        return navmap
 
 
 class Map:
@@ -120,7 +135,8 @@ class Map:
             shape[:,0] = geom[:,0]*render_scale
             shape[:,1] = boundary[1]-geom[:,1]*render_scale
             progress = el.is_inprogress()
-            if progress:
+            mapped = el.is_mapped()
+            if progress and not(mapped):
                 cv2.fillPoly(img,pts=[shape],color=0.5)
             else:
                 cv2.fillPoly(img,pts=[shape],color=0)
@@ -230,6 +246,13 @@ class Element(Obstacle):
 
     def set_inprogress(self, state):
         self.inprogress = state
+
+    def is_mapped(self):
+        return self.mapped
+
+    def set_mapped(self, state):
+        self.mapped = state
+
 
     def clone(self):
         element = Element(self.name, self.geometry,self.inprogress)

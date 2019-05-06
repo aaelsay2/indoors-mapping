@@ -110,14 +110,19 @@ def preprocess_frame(frame):
 
 
 def plot_game():
-  plt.figure(1)
-  plt.clf()
-  img = get_screen().squeeze(0).cpu().numpy()
-  # pdb.set_trace()
+    img = env.render()
+    # img = get_screen().squeeze(0).cpu().numpy()
+    cv2.imshow('map',img)
+    cv2.waitKey(20)
 
-  plt.imshow(img, interpolation='none',cmap='gray')
-  plt.show()
-  plt.pause(0.001)  # pause a bit so that plots are updated
+
+#   plt.figure(1)
+#   plt.clf()
+#   # pdb.set_trace()
+
+#   plt.imshow(img, interpolation='none',cmap='gray')
+#   plt.show()
+#   plt.pause(0.0001)  # pause a bit so that plots are updated
 
 
 BATCH_SIZE = 128
@@ -254,10 +259,13 @@ if __name__=='__main__':
     reward, collision, done = env.step(action.item()) #item()
 
     next_state = get_screen()
+    if(done or collision):
+        next_state = None
+
     memory.push(state, action, next_state, reward)
     state = next_state
 
-    if(done):
+    if(done or collision):
         env.reset()
         state = get_screen()
 
@@ -267,6 +275,8 @@ if __name__=='__main__':
   logging.info('Training Start')
 
   total_frame_count = 0
+
+  env.reset()
 
   for i_episode in range(num_episodes):
   # Initialize the environment and state
@@ -288,9 +298,8 @@ if __name__=='__main__':
       reward = torch.tensor([reward], device=device)
 
       current_screen = get_screen()
-      if not(done or collision):
-        next_state = current_screen
-      else:
+      next_state = current_screen
+      if done or collision:        
         next_state = None
 
       # plt.figure(1)

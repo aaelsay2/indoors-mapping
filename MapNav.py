@@ -3,10 +3,12 @@ import numpy as np
 import random
 import math
 import cv2
+import matplotlib.pyplot as plt
 from MapFactory import MapFactory
 
+
 class MapNav:
-    def __init__(self, map_id, safe_offset=3, sensor_range=10, fov=60, resolution=50):
+    def __init__(self, map_id, safe_offset=3, sensor_range=30, fov=60, resolution=50):
         self.map = MapFactory().create_map(map_id)
         self.safe_offset = safe_offset
         self.sensor_range = sensor_range
@@ -18,7 +20,8 @@ class MapNav:
         self.incollision = False
         self.score = 0
         self.sim_images = []
-        self.initialize_config()
+        # self.initialize_config()
+        self.set_default_config()
         self.reset()
 
 
@@ -29,6 +32,7 @@ class MapNav:
         self.set_init_config(self.init_config)
         self.sim_images = []
         self.hide_obstacles()
+        self.reset_mapped()
 
     def start_recording(self):
         self.sim_images = []
@@ -63,6 +67,13 @@ class MapNav:
         self.init_config = config.clone()
         self.cur_config = config.clone()
 
+    def set_default_config(self):
+        boundary = self.map.get_boundary()
+        x = int(boundary[0]/2)
+        y = int(boundary[1]/2)
+        config = Config(x, y, 0)
+        self.set_init_config(config)
+
     def inflate(self,element, safe_offset):
         boundary = self.map.get_boundary()
         bbox = element.get_bbox()
@@ -88,6 +99,10 @@ class MapNav:
     def hide_obstacles(self):
         for o in self.map.get_obstacles():
             o.set_detected(False)
+
+    def reset_mapped(self):
+        for el in self.map.get_elements():
+            el.set_mapped(False)
 
     def check_collision(self, config):
         boundary = self.map.get_boundary()
@@ -123,6 +138,7 @@ class MapNav:
             if distance<=sensor_range and angle<=(fov/2):
                 mapped = self.set_mapped(el)
                 if mapped:
+                    el.set_mapped(True)
                     observed.append(el)
         return observed
 
@@ -212,7 +228,9 @@ class MapNav:
         #     print 'Mapped new elemenets', observed
 
         if render:
-            self.render()
+            img = self.render()
+            cv2.imshow('map',img)
+            cv2.waitKey(30)
 
         return number_mapped
 
@@ -284,8 +302,7 @@ class Config:
 if __name__ == "__main__":
 
     nav = MapNav(map_id=1, safe_offset=3, sensor_range=20, fov=60, resolution=50)
-    conf = Config(40,10,0)
-    nav.set_init_config(conf)
+    nav.set_default_config()
 
     nav.start_recording()
 
